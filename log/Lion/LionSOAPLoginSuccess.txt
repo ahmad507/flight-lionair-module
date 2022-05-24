@@ -1,0 +1,5 @@
+stdClass Object
+(
+    [LogonResult] => OK
+)
+
