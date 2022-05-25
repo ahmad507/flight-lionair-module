@@ -113,6 +113,77 @@
             #--------------------------------------------------------------------------------------------
         }
         
+        public function SearchFlight()
+        {
+            #________________________________________________________________
+            // manual setup each request service
+            $url = 'http://202.4.170.9/';
+            $action_path = 'LionAirTAAPI/FlightMatrixService.asmx?wsdl';
+            $service = 'GetFlightMatrix';
+            $action = 'FlightMatrixRQ';
+            #________________________________________________________________
+            try {
+                $client = new LionSoap($url . $action_path);
+            } catch (SoapFault $e) {
+                $response =  $e->getMessage();
+                $this->_log_response("../log/Lion/LionSoapFaultSearchFlight.txt", $response);
+                return response()->json($response, 400);
+            }
+            $binary_security_token = Session::get('BinarySecurityToken');
+            $security = ['BinarySecurityToken' => $binary_security_token];
+            $headers [] = new SoapHeader('http://www.ebxml.org/namespaces/messageHeader', 'MessageHeader', $this->_message_header($service, $action));
+            $headers [] = new SoapHeader('http://schemas.xmlsoap.org/ws/2002/12/secext', 'Security', $security);
+            #--------------------------------------------------------------------------------------------
+            //  request login for binary security token
+            $air_traveler_avail = array();
+    
+            $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'ADT', 'Quantity' => 1 ] ] ];
+            
+            $carrier_code = 'JT';
+            $origin = 'DPS';
+            $destination = 'CGK';
+            
+            $search_param = [
+                'flightMatrixRQ' => [
+                    'AirItinerary' => [
+                        'OriginDestinationOptions' => [
+                            'OriginDestinationOption' => [
+                                'FlightSegment' => [
+                                    'DepartureDateTime' => date("Y-m-d\TH:i:s", time() + 86400),
+                                    'MarketingAirline' => [ 'Code' => $carrier_code ],
+                                    'DepartureAirport' => [ 'LocationCode' => $origin ],
+                                    'ArrivalAirport' => [ 'LocationCode' => $destination ],
+                                ],
+                            ],
+                        ],
+                    ],
+                    'TravelerInfoSummary' => [
+                        'AirTravelerAvail' => $air_traveler_avail,
+                    ],
+                ],
+            ];
+            
+            try {
+                if (isset($client)) {
+                    $client->__setSoapHeaders($headers);
+                }
+                if (isset($client)) {
+                    $response = $client->FlightMatrixRequest2($search_param);
+                    $this->_log_response("../log/Lion/LionSOAPSearchFlightSuccess.txt", $response);
+                }
+                if (isset($response)) {
+                    return response()->json($response, 200);
+                }
+            } catch (Exception $e){
+                $response =  $e->getMessage();
+                $this->_log_response("../log/Lion/LionSOAPSearchFlightFailed.txt", $response);
+                return response()->json($response, 400);
+            } finally {
+                $response = 'Finally Request Data Result';
+                return response()->json($response, 200);
+            }
+        }
+        
         private function _message_header($service, $action)
         {
             return [

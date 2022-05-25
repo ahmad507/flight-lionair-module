@@ -22,6 +22,8 @@ class BookingAirlinesController extends Controller
         // get data search booking
         // create matrix
         $response_login = $this->lionAirRepository->LoginClient();
-        echo $response_login;
+        sleep(2);
+        $response_search = $this->lionAirRepository->SearchFlight();
+        echo $response_search;
     }
 }
