@@ -7,6 +7,7 @@
     use Illuminate\Support\Facades\Session;
     use SoapFault;
     use SoapHeader;
+    use Spatie\ArrayToXml\ArrayToXml;
     
     class LionAirRepository
     {
@@ -149,7 +150,7 @@
                         'OriginDestinationOptions' => [
                             'OriginDestinationOption' => [
                                 'FlightSegment' => [
-                                    'DepartureDateTime' => date("Y-m-d\TH:i:s", time() + 86400),
+                                    'DepartureDateTime' => date("Y-m-d\TH:i:s", time() + 886400),
                                     'MarketingAirline' => [ 'Code' => $carrier_code ],
                                     'DepartureAirport' => [ 'LocationCode' => $origin ],
                                     'ArrivalAirport' => [ 'LocationCode' => $destination ],
@@ -168,8 +169,15 @@
                     $client->__setSoapHeaders($headers);
                 }
                 if (isset($client)) {
-                    $response = $client->FlightMatrixRequest2($search_param);
+                    $response = $client->FlightMatrixRequest($search_param);
+                    $reverse_data = $this->_rev($response);
+                    
+                    $data_response = ArrayToXml::convert($reverse_data);
+                    
+                    // save response------------------------------------------------------------------------------------------------
                     $this->_log_response("../log/Lion/LionSOAPSearchFlightSuccess.txt", $response);
+                    $this->_log_response("../log/Lion/LionSOAPSearchFlightSuccess.xml", $data_response);
+                    //-------------------------------------------------------------------------------------------------------------------
                 }
                 if (isset($response)) {
                     return response()->json($response, 200);
@@ -178,9 +186,6 @@
                 $response =  $e->getMessage();
                 $this->_log_response("../log/Lion/LionSOAPSearchFlightFailed.txt", $response);
                 return response()->json($response, 400);
-            } finally {
-                $response = 'Finally Request Data Result';
-                return response()->json($response, 200);
             }
         }
         
@@ -200,5 +205,9 @@
             fwrite($f, print_r($response, true) . "\n");
             fclose($f);
         }
-        
+    
+        private function _rev($response)
+        {
+            return json_decode(json_encode($response), true);
+        }
     }
