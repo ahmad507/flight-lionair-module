@@ -13,7 +13,6 @@
         {
             $xmlRequest = new DOMDocument('1.0');
             $xmlRequest->loadXML($request);
-            
             $request = $xmlRequest->saveXML();
             
             $response = parent::__doRequest($request, $location, $action, $version, $one_way=null);
@@ -36,5 +35,6 @@
             return $response;
             
         }
+        
         
     }
