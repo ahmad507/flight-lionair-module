@@ -7,13 +7,86 @@
     use Illuminate\Support\Facades\Session;
     use SoapFault;
     use SoapHeader;
-    use Spatie\ArrayToXml\ArrayToXml;
+    use stdClass;
     
     class LionAirRepository
     {
-    
+        
         private $token;
-    
+        
+        private function _message_header($service, $action)
+        {
+            return [
+                'CPAId' => 'JT',
+                'Service' => $service,
+                'Action' => $action,
+                'MessageData' => [ 'MessageId' => 'mid:13:30:03.161@vedaleon.com' ],
+            ];
+        }
+        
+        private function _log_response($file, $response)
+        {
+            $f = fopen($file, 'w');
+            fwrite($f, print_r($response, true) . "\n");
+            fclose($f);
+        }
+        
+        private function _rev($response)
+        {
+            return json_decode(json_encode($response), true);
+        }
+        
+        private function _create_matrix_row($data_response)
+        {
+            $flight_matrix_rows = [];
+            
+            $flight_matrix_row = $data_response->FlightMatrixRS->FlightMatrices->FlightMatrix->FlightMatrixRows->FlightMatrixRow;
+            if ($flight_matrix_row instanceOf stdClass) $flight_matrix_row = array($flight_matrix_row);
+            
+            $i = -1;
+            foreach ($flight_matrix_row as $row) {
+                $flight_segment = [];
+                
+                $flight_segment = $row->OriginDestinationOptionType->FlightSegment;
+                if ($flight_segment instanceOf stdClass) $flight_segment = array($flight_segment);
+                
+                foreach ($flight_segment as $segment) {
+                    $flight_number = $segment->OperatingAirline->Code . ' ' . $segment->OperatingAirline->FlightNumber;
+                    
+                    if (empty(str_replace(' ', '', $flight_number))) continue;
+                    $i++;
+                    
+                    $time_depart = strtotime($segment->DepartureDateTime);
+                    $time_arrive = strtotime($segment->ArrivalDateTime);
+                    
+                    $result[$i]['id'] = $i;
+                    $result[$i]['flight'] = $flight_number;
+                    $result[$i]['route'] = $segment->DepartureAirport->LocationCode . '-' . $segment->ArrivalAirport->LocationCode;
+                    $result[$i]['time_depart'] = (string)$time_depart;
+                    $result[$i]['time_arrive'] = (string)$time_arrive;
+                    $result[$i]['str_time'] = date('H:i', $time_depart) . ' ' . date('H:i', $time_arrive);
+                    $result[$i]['longdate'] = $time_depart;
+                    $result[$i]['weekday'] = strtoupper(date('D', $time_depart));
+                    
+                    $booking_class_avail = [];
+                    
+                    $booking_class_avail = $segment->BookingClassAvails->BookingClassAvail;
+                    if ($booking_class_avail instanceOf stdClass) $booking_class_avail = array($booking_class_avail);
+                    
+                    $j = -1;
+                    foreach ($booking_class_avail as $class) {
+                        $segment_key = [ $segment->OperatingAirline->Code, $segment->OperatingAirline->FlightNumber, $segment->OperatingAirline ->CodeContext, $class->ResBookDesigCode, (int) $class->ResBookDesigQuantity, $segment->DepartureAirport->LocationCode, date('Y-m-d\TH:i:s', $result[$i]['time_depart']), $segment->ArrivalAirport->LocationCode, date('Y-m-d\TH:i:s', $result[$i]['time_arrive']), $segment->StopQuantity, $segment->RPH, $segment->MarketingAirline->Code, $segment->MarketingAirline->CodeContext, $segment->RPH, $segment->StopQuantity, $segment->DepartureAirport->LocationCode, $segment->ArrivalAirport->LocationCode ]; // QG~ 213~ ~~UPG~11/23/2019 08:15~CGK~11/23/2019 10:00~
+                        $j++;
+                        $result[$i][$j]['class'] = $class->ResBookDesigCode;
+                        $result[$i][$j]['seat'] = (int) $class->ResBookDesigQuantity;
+                        $result[$i][$j]['value'] = implode('#', $segment_key);
+                        $result[$i][$j]['disabled'] = ($result[$i][$j]['seat'] == 0) ? 'avail' : 'full';
+                    }
+                }
+            }
+            return $result;
+        }
+        
         public function LoginClient()
         {
             #________________________________________________________________
@@ -116,6 +189,9 @@
         
         public function SearchFlight()
         {
+            /*--------------------------------------------------------------------------------------------
+            *  TODO Implementsi data dari interface
+           ----------------------------------------------------------------------------------------------*/
             #________________________________________________________________
             // manual setup each request service
             $url = 'http://202.4.170.9/';
@@ -134,16 +210,17 @@
             $security = ['BinarySecurityToken' => $binary_security_token];
             $headers [] = new SoapHeader('http://www.ebxml.org/namespaces/messageHeader', 'MessageHeader', $this->_message_header($service, $action));
             $headers [] = new SoapHeader('http://schemas.xmlsoap.org/ws/2002/12/secext', 'Security', $security);
-            #--------------------------------------------------------------------------------------------
-            //  request login for binary security token
+            /*--------------------------------------------------------------------------------------------
+             *  TODO Implementsi request menggunakan parameter dari Controller
+            ----------------------------------------------------------------------------------------------*/
             $air_traveler_avail = array();
-    
             $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'ADT', 'Quantity' => 1 ] ] ];
-            
             $carrier_code = 'JT';
             $origin = 'DPS';
             $destination = 'CGK';
-            
+            /*--------------------------------------------------------------------------------------------
+             *  TODO Data Untuk AirTraveler extends dari Helper SOAP Passenger
+            ----------------------------------------------------------------------------------------------*/
             $search_param = [
                 'flightMatrixRQ' => [
                     'AirItinerary' => [
@@ -163,20 +240,26 @@
                     ],
                 ],
             ];
-            
+            #--------------------------------------------------------------------------------------------
             try {
                 if (isset($client)) {
                     $client->__setSoapHeaders($headers);
                 }
                 if (isset($client)) {
                     $response = $client->FlightMatrixRequest($search_param);
-                    $reverse_data = $this->_rev($response);
+                    // data create --------------------------------------------------------------------------------------------------
                     
-                    $data_response = ArrayToXml::convert($reverse_data);
+                    /**
+                     * -create_matrix_route_flight
+                     * -create_ matrix_class_flight
+                     *  -create_matrix_seat_flight
+                     * */
+                    $flight_matrix_row = $this->_create_matrix_row($response);
+                    $this->_log_response("../log/Lion/LionSOAPMatrixRow.txt", $flight_matrix_row);
                     
                     // save response------------------------------------------------------------------------------------------------
-                    $this->_log_response("../log/Lion/LionSOAPSearchFlightSuccess.txt", $response);
-                    $this->_log_response("../log/Lion/LionSOAPSearchFlightSuccess.xml", $data_response);
+                    $response_success = 'Finish Search Flight';
+                    $this->_log_response("../log/Lion/LionSOAPSearchFlightSuccess.txt", $response_success);
                     //-------------------------------------------------------------------------------------------------------------------
                 }
                 if (isset($response)) {
@@ -184,30 +267,12 @@
                 }
             } catch (Exception $e){
                 $response =  $e->getMessage();
-                $this->_log_response("../log/Lion/LionSOAPSearchFlightFailed.txt", $response);
+                $response_failed = 'Finish Search Flight With Error :';
+                $this->_log_response("../log/Lion/LionSOAPSearchFlightFailed.txt", $response_failed.' '.$response);
                 return response()->json($response, 400);
             }
         }
         
-        private function _message_header($service, $action)
-        {
-            return [
-                'CPAId' => 'JT',
-                'Service' => $service,
-                'Action' => $action,
-                'MessageData' => [ 'MessageId' => 'mid:13:30:03.161@vedaleon.com' ],
-            ];
-        }
-    
-        private function _log_response($file, $response)
-        {
-            $f = fopen($file, 'w');
-            fwrite($f, print_r($response, true) . "\n");
-            fclose($f);
-        }
-    
-        private function _rev($response)
-        {
-            return json_decode(json_encode($response), true);
-        }
+        
+        
     }
