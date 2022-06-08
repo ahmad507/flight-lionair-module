@@ -2,6 +2,8 @@
     
     
     namespace App\Repositories\Airline\Lion;
+    use App\Repositories\Pax;
+    use App\Repositories\SearchRequest;
     use App\SOAP\LionSoap;
     use Exception;
     use Illuminate\Support\Facades\Session;
@@ -187,17 +189,28 @@
             #--------------------------------------------------------------------------------------------
         }
         
-        public function SearchFlight()
+        public function SearchFlight($request)
         {
             /*--------------------------------------------------------------------------------------------
             *  TODO Implementsi data dari interface
            ----------------------------------------------------------------------------------------------*/
+            $search_request = new SearchRequest();
+            $pax_request = new Pax();
+    
+            $search_request->date = $request->from_date;
+            $search_request->origin = $request->from_code;
+            $search_request->destination = $request->to_code;
+            $search_trip_type = $request->trip_type;
+            $pax_request->adultCount = $request->adult;
+            $pax_request->childCount = $request->child;
+            $pax_request->infantCount = $request->infant;
             #________________________________________________________________
             // manual setup each request service
             $url = 'http://202.4.170.9/';
             $action_path = 'LionAirTAAPI/FlightMatrixService.asmx?wsdl';
             $service = 'GetFlightMatrix';
             $action = 'FlightMatrixRQ';
+            $carrier_code = 'JT';
             #________________________________________________________________
             try {
                 $client = new LionSoap($url . $action_path);
@@ -210,14 +223,12 @@
             $security = ['BinarySecurityToken' => $binary_security_token];
             $headers [] = new SoapHeader('http://www.ebxml.org/namespaces/messageHeader', 'MessageHeader', $this->_message_header($service, $action));
             $headers [] = new SoapHeader('http://schemas.xmlsoap.org/ws/2002/12/secext', 'Security', $security);
-            /*--------------------------------------------------------------------------------------------
-             *  TODO Implementsi request menggunakan parameter dari Controller
-            ----------------------------------------------------------------------------------------------*/
+            /*----------------------------------------------------------------------------------------------*/
             $air_traveler_avail = array();
-            $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'ADT', 'Quantity' => 1 ] ] ];
-            $carrier_code = 'JT';
-            $origin = 'DPS';
-            $destination = 'CGK';
+            $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'ADT', 'Quantity' => $pax_request->adultCount ] ] ];
+            if ((int) $pax_request->childCount > 0) $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'CNN', 'Quantity' => $pax_request->childCount ] ] ];
+            if ((int) $pax_request->infantCount > 0) $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'INF', 'Quantity' => $pax_request->infantCount ] ] ];
+            
             /*--------------------------------------------------------------------------------------------
              *  TODO Data Untuk AirTraveler extends dari Helper SOAP Passenger
             ----------------------------------------------------------------------------------------------*/
@@ -227,10 +238,10 @@
                         'OriginDestinationOptions' => [
                             'OriginDestinationOption' => [
                                 'FlightSegment' => [
-                                    'DepartureDateTime' => date("Y-m-d\TH:i:s", time() + 886400),
+                                    'DepartureDateTime' => $search_request->date,
                                     'MarketingAirline' => [ 'Code' => $carrier_code ],
-                                    'DepartureAirport' => [ 'LocationCode' => $origin ],
-                                    'ArrivalAirport' => [ 'LocationCode' => $destination ],
+                                    'DepartureAirport' => [ 'LocationCode' => $search_request->origin ],
+                                    'ArrivalAirport' => [ 'LocationCode' => $search_request->destination ],
                                 ],
                             ],
                         ],
