@@ -2,6 +2,8 @@
     
     
     namespace App\Repositories\Airline\Lion;
+    use App\Repositories\Pax;
+    use App\Repositories\SearchRequest;
     use App\SOAP\LionSoap;
     use Exception;
     use Illuminate\Support\Facades\Session;
@@ -39,8 +41,8 @@
         private function _create_matrix_row($data_response)
         {
             $flight_matrix_rows = [];
-            
             $flight_matrix_row = $data_response->FlightMatrixRS->FlightMatrices->FlightMatrix->FlightMatrixRows->FlightMatrixRow;
+            
             if ($flight_matrix_row instanceOf stdClass) $flight_matrix_row = array($flight_matrix_row);
             
             $i = -1;
@@ -187,17 +189,29 @@
             #--------------------------------------------------------------------------------------------
         }
         
-        public function SearchFlight()
+        public function SearchFlight($DepartureDate, $ArrivalDate, $DepartureAirport, $ArrivalAirport, $PassengerAdult, $PassengerChild, $PassengerInfant)
         {
             /*--------------------------------------------------------------------------------------------
             *  TODO Implementsi data dari interface
            ----------------------------------------------------------------------------------------------*/
+            $search_request = new SearchRequest();
+            $pax_request = new Pax();
+            
+            $search_request->date = $DepartureDate;
+            $search_request->datereturn = $ArrivalDate;
+            $search_request->origin = $DepartureAirport;
+            $search_request->destination = $ArrivalAirport;
+//            $search_trip_type = $request->trip_type;
+            $pax_request->adultCount = $PassengerAdult;
+            $pax_request->childCount = $PassengerChild;
+            $pax_request->infantCount = $PassengerInfant;
             #________________________________________________________________
             // manual setup each request service
             $url = 'http://202.4.170.9/';
             $action_path = 'LionAirTAAPI/FlightMatrixService.asmx?wsdl';
             $service = 'GetFlightMatrix';
             $action = 'FlightMatrixRQ';
+            $carrier_code = 'JT';
             #________________________________________________________________
             try {
                 $client = new LionSoap($url . $action_path);
@@ -210,14 +224,12 @@
             $security = ['BinarySecurityToken' => $binary_security_token];
             $headers [] = new SoapHeader('http://www.ebxml.org/namespaces/messageHeader', 'MessageHeader', $this->_message_header($service, $action));
             $headers [] = new SoapHeader('http://schemas.xmlsoap.org/ws/2002/12/secext', 'Security', $security);
-            /*--------------------------------------------------------------------------------------------
-             *  TODO Implementsi request menggunakan parameter dari Controller
-            ----------------------------------------------------------------------------------------------*/
+            /*----------------------------------------------------------------------------------------------*/
             $air_traveler_avail = array();
-            $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'ADT', 'Quantity' => 1 ] ] ];
-            $carrier_code = 'JT';
-            $origin = 'DPS';
-            $destination = 'CGK';
+            $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'ADT', 'Quantity' => $pax_request->adultCount ] ] ];
+            if ((int) $pax_request->childCount > 0) $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'CNN', 'Quantity' => $pax_request->childCount ] ] ];
+            if ((int) $pax_request->infantCount > 0) $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'INF', 'Quantity' => $pax_request->infantCount ] ] ];
+            
             /*--------------------------------------------------------------------------------------------
              *  TODO Data Untuk AirTraveler extends dari Helper SOAP Passenger
             ----------------------------------------------------------------------------------------------*/
@@ -227,10 +239,10 @@
                         'OriginDestinationOptions' => [
                             'OriginDestinationOption' => [
                                 'FlightSegment' => [
-                                    'DepartureDateTime' => date("Y-m-d\TH:i:s", time() + 886400),
+                                    'DepartureDateTime' => $search_request->date,
                                     'MarketingAirline' => [ 'Code' => $carrier_code ],
-                                    'DepartureAirport' => [ 'LocationCode' => $origin ],
-                                    'ArrivalAirport' => [ 'LocationCode' => $destination ],
+                                    'DepartureAirport' => [ 'LocationCode' => $search_request->origin ],
+                                    'ArrivalAirport' => [ 'LocationCode' => $search_request->destination ],
                                 ],
                             ],
                         ],
@@ -247,23 +259,20 @@
                 }
                 if (isset($client)) {
                     $response = $client->FlightMatrixRequest($search_param);
-                    // data create --------------------------------------------------------------------------------------------------
-                    
-                    /**
-                     * -create_matrix_route_flight
-                     * -create_ matrix_class_flight
-                     *  -create_matrix_seat_flight
-                     * */
-                    $flight_matrix_row = $this->_create_matrix_row($response);
-                    $this->_log_response("../log/Lion/LionSOAPMatrixRow.txt", $flight_matrix_row);
-                    
                     // save response------------------------------------------------------------------------------------------------
-                    $response_success = 'Finish Search Flight';
-                    $this->_log_response("../log/Lion/LionSOAPSearchFlightSuccess.txt", $response_success);
+                    $response_status = $response->FlightMatrixRS->FlightMatrices->FlightMatrix->FlightSearchResult;
+                    if ($response_status == 'NoSchedule'){
+                        $status_message = 'No Schedule Available';
+                        return response()->json($status_message, 200);
+                    } else {
+                        $flight_matrix_row = $this->_create_matrix_row($response);
+                        $this->_log_response("../log/Lion/LionSOAPMatrixRow.txt", $flight_matrix_row);
+                        $this->_log_response("../log/Lion/LionSOAPSearchFlightSuccess.txt", $response_status);
+                    }
                     //-------------------------------------------------------------------------------------------------------------------
                 }
-                if (isset($response)) {
-                    return response()->json($response, 200);
+                if (isset($flight_matrix_row)) {
+                    return response()->json($flight_matrix_row, 200);
                 }
             } catch (Exception $e){
                 $response =  $e->getMessage();
@@ -272,7 +281,4 @@
                 return response()->json($response, 400);
             }
         }
-        
-        
-        
     }
