@@ -41,8 +41,8 @@
         private function _create_matrix_row($data_response)
         {
             $flight_matrix_rows = [];
-            
             $flight_matrix_row = $data_response->FlightMatrixRS->FlightMatrices->FlightMatrix->FlightMatrixRows->FlightMatrixRow;
+            
             if ($flight_matrix_row instanceOf stdClass) $flight_matrix_row = array($flight_matrix_row);
             
             $i = -1;
@@ -189,21 +189,22 @@
             #--------------------------------------------------------------------------------------------
         }
         
-        public function SearchFlight($request)
+        public function SearchFlight($DepartureDate, $ArrivalDate, $DepartureAirport, $ArrivalAirport, $PassengerAdult, $PassengerChild, $PassengerInfant)
         {
             /*--------------------------------------------------------------------------------------------
             *  TODO Implementsi data dari interface
            ----------------------------------------------------------------------------------------------*/
             $search_request = new SearchRequest();
             $pax_request = new Pax();
-    
-            $search_request->date = $request->from_date;
-            $search_request->origin = $request->from_code;
-            $search_request->destination = $request->to_code;
-            $search_trip_type = $request->trip_type;
-            $pax_request->adultCount = $request->adult;
-            $pax_request->childCount = $request->child;
-            $pax_request->infantCount = $request->infant;
+            
+            $search_request->date = $DepartureDate;
+            $search_request->datereturn = $ArrivalDate;
+            $search_request->origin = $DepartureAirport;
+            $search_request->destination = $ArrivalAirport;
+//            $search_trip_type = $request->trip_type;
+            $pax_request->adultCount = $PassengerAdult;
+            $pax_request->childCount = $PassengerChild;
+            $pax_request->infantCount = $PassengerInfant;
             #________________________________________________________________
             // manual setup each request service
             $url = 'http://202.4.170.9/';
@@ -258,23 +259,20 @@
                 }
                 if (isset($client)) {
                     $response = $client->FlightMatrixRequest($search_param);
-                    // data create --------------------------------------------------------------------------------------------------
-                    
-                    /**
-                     * -create_matrix_route_flight
-                     * -create_ matrix_class_flight
-                     *  -create_matrix_seat_flight
-                     * */
-                    $flight_matrix_row = $this->_create_matrix_row($response);
-                    $this->_log_response("../log/Lion/LionSOAPMatrixRow.txt", $flight_matrix_row);
-                    
                     // save response------------------------------------------------------------------------------------------------
-                    $response_success = 'Finish Search Flight';
-                    $this->_log_response("../log/Lion/LionSOAPSearchFlightSuccess.txt", $response_success);
+                    $response_status = $response->FlightMatrixRS->FlightMatrices->FlightMatrix->FlightSearchResult;
+                    if ($response_status == 'NoSchedule'){
+                        $status_message = 'No Schedule Available';
+                        return response()->json($status_message, 200);
+                    } else {
+                        $flight_matrix_row = $this->_create_matrix_row($response);
+                        $this->_log_response("../log/Lion/LionSOAPMatrixRow.txt", $flight_matrix_row);
+                        $this->_log_response("../log/Lion/LionSOAPSearchFlightSuccess.txt", $response_status);
+                    }
                     //-------------------------------------------------------------------------------------------------------------------
                 }
-                if (isset($response)) {
-                    return response()->json($response, 200);
+                if (isset($flight_matrix_row)) {
+                    return response()->json($flight_matrix_row, 200);
                 }
             } catch (Exception $e){
                 $response =  $e->getMessage();
@@ -283,7 +281,4 @@
                 return response()->json($response, 400);
             }
         }
-        
-        
-        
     }
