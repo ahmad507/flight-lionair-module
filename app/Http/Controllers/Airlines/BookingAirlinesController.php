@@ -5,7 +5,6 @@
     use App\Http\Controllers\Controller;
     use App\Repositories\Airline\Lion\LionAirRepository;
     use Illuminate\Http\Request;
-    use stdClass;
     
     class BookingAirlinesController extends Controller
     {
@@ -59,9 +58,12 @@
                 return 'Total requested seats (including children) must not exceed 7';
             }
             #___________________________________________________________________________
-            $response_login = $this->lionAirRepository->LoginClient();
-            sleep(2);
-            $response_search = $this->lionAirRepository->SearchFlight($DepartureDate, $ArrivalDate, $DepartureAirport, $ArrivalAirport, $PassengerAdult, $PassengerChild, $PassengerInfant );
-            return $response_search;
+            $response_login = $this->lionAirRepository->LoginClient();  //  login
+            $response_search = $this->lionAirRepository->SearchFlight($DepartureDate, $ArrivalDate, $DepartureAirport, $ArrivalAirport, $PassengerAdult, $PassengerChild, $PassengerInfant ); //  search data
+            $response_logout = $this->lionAirRepository->LogoutClient();  // logout
+            return $response_search;  // callback data
         }
+        
+        
+        
     }

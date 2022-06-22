@@ -1,6 +1,5 @@
 <?php
     
-    
     namespace App\Repositories\Airline\Lion;
     use App\Repositories\Pax;
     use App\Repositories\SearchRequest;
@@ -191,9 +190,6 @@
         
         public function SearchFlight($DepartureDate, $ArrivalDate, $DepartureAirport, $ArrivalAirport, $PassengerAdult, $PassengerChild, $PassengerInfant)
         {
-            /*--------------------------------------------------------------------------------------------
-            *  TODO Implementsi data dari interface
-           ----------------------------------------------------------------------------------------------*/
             $search_request = new SearchRequest();
             $pax_request = new Pax();
             
@@ -201,7 +197,6 @@
             $search_request->datereturn = $ArrivalDate;
             $search_request->origin = $DepartureAirport;
             $search_request->destination = $ArrivalAirport;
-//            $search_trip_type = $request->trip_type;
             $pax_request->adultCount = $PassengerAdult;
             $pax_request->childCount = $PassengerChild;
             $pax_request->infantCount = $PassengerInfant;
@@ -229,10 +224,6 @@
             $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'ADT', 'Quantity' => $pax_request->adultCount ] ] ];
             if ((int) $pax_request->childCount > 0) $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'CNN', 'Quantity' => $pax_request->childCount ] ] ];
             if ((int) $pax_request->infantCount > 0) $air_traveler_avail[] = [ 'AirTraveler' => [ 'PassengerTypeQuantity' => [ 'Code' => 'INF', 'Quantity' => $pax_request->infantCount ] ] ];
-            
-            /*--------------------------------------------------------------------------------------------
-             *  TODO Data Untuk AirTraveler extends dari Helper SOAP Passenger
-            ----------------------------------------------------------------------------------------------*/
             $search_param = [
                 'flightMatrixRQ' => [
                     'AirItinerary' => [
@@ -260,14 +251,16 @@
                 if (isset($client)) {
                     $response = $client->FlightMatrixRequest($search_param);
                     // save response------------------------------------------------------------------------------------------------
-                    $response_status = $response->FlightMatrixRS->FlightMatrices->FlightMatrix->FlightSearchResult;
-                    if ($response_status == 'NoSchedule'){
+                    $response_status_result = $response->FlightMatrixRS->FlightMatrices->FlightMatrix->FlightSearchResult;
+                    $response_status_rows = $response->FlightMatrixRS->FlightMatrices->FlightMatrix->FlightMatrixRows;
+                    if ($response_status_rows instanceOf stdClass) $response_status_rows = json_encode($response_status_rows);
+                    if (($response_status_result == 'NoSchedule') || ($response_status_rows == '{}')){
                         $status_message = 'No Schedule Available';
                         return response()->json($status_message, 200);
                     } else {
                         $flight_matrix_row = $this->_create_matrix_row($response);
                         $this->_log_response("../log/Lion/LionSOAPMatrixRow.txt", $flight_matrix_row);
-                        $this->_log_response("../log/Lion/LionSOAPSearchFlightSuccess.txt", $response_status);
+                        $this->_log_response("../log/Lion/LionSOAPSearchFlightSuccess.txt", $response_status_result);
                     }
                     //-------------------------------------------------------------------------------------------------------------------
                 }
