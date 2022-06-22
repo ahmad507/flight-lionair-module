@@ -26,13 +26,21 @@
             $ArrivalDate = $request->arival_date;
             $DepartureAirport = $request->from_code;
             $ArrivalAirport = $request->to_code;
+            $ReturnAirport = $request->return_code;
             $PassengerAdult = $request->adult;
             $PassengerChild = $request->child;
             $PassengerInfant = $request->infant;
             #__________________________________________________________________________
             if ($DepartureDate < $DateNow){
                 return 'Not Valid Date';
+            } else if (!empty($ReturnAirport)){
+                if ($ArrivalDate < $DepartureDate){
+                    return 'Not Valid Date';
+                } else if ($ArrivalAirport == $ReturnAirport){
+                    return 'Not Valid Return Airport';
+                }
             }
+            #__________________________________________________________________________
             if (empty($DepartureAirport)){
                 return 'Not Valid Origin Airport';
             }
