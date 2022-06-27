@@ -5,7 +5,6 @@
     use App\Http\Controllers\Controller;
     use App\Repositories\Airline\Lion\LionAirRepository;
     use Illuminate\Http\Request;
-    use stdClass;
     
     class BookingAirlinesController extends Controller
     {
@@ -26,13 +25,21 @@
             $ArrivalDate = $request->arival_date;
             $DepartureAirport = $request->from_code;
             $ArrivalAirport = $request->to_code;
+            $ReturnAirport = $request->return_code;
             $PassengerAdult = $request->adult;
             $PassengerChild = $request->child;
             $PassengerInfant = $request->infant;
             #__________________________________________________________________________
             if ($DepartureDate < $DateNow){
                 return 'Not Valid Date';
+            } else if (!empty($ReturnAirport)){
+                if ($ArrivalDate < $DepartureDate){
+                    return 'Not Valid Date';
+                } else if ($ArrivalAirport == $ReturnAirport){
+                    return 'Not Valid Return Airport';
+                }
             }
+            #__________________________________________________________________________
             if (empty($DepartureAirport)){
                 return 'Not Valid Origin Airport';
             }
@@ -51,9 +58,12 @@
                 return 'Total requested seats (including children) must not exceed 7';
             }
             #___________________________________________________________________________
-            $response_login = $this->lionAirRepository->LoginClient();
-            sleep(2);
-            $response_search = $this->lionAirRepository->SearchFlight($DepartureDate, $ArrivalDate, $DepartureAirport, $ArrivalAirport, $PassengerAdult, $PassengerChild, $PassengerInfant );
-            return $response_search;
+            $response_login = $this->lionAirRepository->LoginClient();  //  login
+            $response_search = $this->lionAirRepository->SearchFlight($DepartureDate, $ArrivalDate, $DepartureAirport, $ArrivalAirport, $PassengerAdult, $PassengerChild, $PassengerInfant ); //  search data
+            $response_logout = $this->lionAirRepository->LogoutClient();  // logout
+            return $response_search;  // callback data
         }
+        
+        
+        
     }
